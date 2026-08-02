@@ -66,7 +66,6 @@
             display: block;
         }
 
-        /* Navigation Fixe Basse (5 onglets) */
         nav {
             position: absolute;
             bottom: 0;
@@ -103,7 +102,6 @@
             background-color: var(--taupe);
         }
 
-        /* Formulaires & Boutons */
         input, select {
             width: 100%;
             padding: 12px;
@@ -131,7 +129,6 @@
             background-color: var(--accent);
         }
 
-        /* Cartes Stock & Courses */
         .card {
             background-color: var(--card-bg);
             padding: 15px;
@@ -159,7 +156,6 @@
             gap: 10px;
         }
 
-        /* Section Recettes de Chef */
         .category-title {
             margin: 10px 0 15px 0;
             font-size: 1.2rem;
@@ -337,9 +333,15 @@
         }
 
         function saveIngredient() {
-            const name = document.getElementById('ing-name').value.trim();
-            const qty = parseFloat(document.getElementById('ing-qty').value);
-            const unit = document.getElementById('ing-unit').value;
+            const nameInput = document.getElementById('ing-name');
+            const qtyInput = document.getElementById('ing-qty');
+            const unitInput = document.getElementById('ing-unit');
+
+            if(!nameInput || !qtyInput) return;
+
+            const name = nameInput.value.trim();
+            const qty = parseFloat(qtyInput.value);
+            const unit = unitInput.value;
 
             if(!name || isNaN(qty)) {
                 alert("Veuillez remplir correctement le nom et la quantité.");
@@ -353,8 +355,8 @@
                 stock.push({ name, qty, unit });
             }
 
-            document.getElementById('ing-name'].value = '';
-            document.getElementById('ing-qty').value = '';
+            nameInput.value = '';
+            qtyInput.value = '';
             renderStock();
         }
 
@@ -373,6 +375,7 @@
 
         function renderStock() {
             const listContainer = document.getElementById('stock-list');
+            if(!listContainer) return;
             listContainer.innerHTML = '';
             stock.forEach((item, index) => {
                 listContainer.innerHTML += `
@@ -390,34 +393,33 @@
             });
         }
 
-        // Génération ultra-détaillée type Chef (Séparée Salé / Sucré à chaque appui)
         async function fetchRecipesFromAI(category) {
             const containerId = category === 'savory' ? 'savory-container' : 'sweet-container';
             const container = document.getElementById(containerId);
-            const profile = document.getElementById(category === 'savory' ? 'profile-select-savory' : 'profile-select-sweet').value;
+            const profileSelect = document.getElementById(category === 'savory' ? 'profile-select-savory' : 'profile-select-sweet');
+            const profile = profileSelect ? profileSelect.value : 'famille';
             
             const recipeTypeLabel = category === 'savory' ? 'salées haut de gamme et ultra-savoureuses' : 'sucrées gourmandes et raffinées';
-            container.innerHTML = `<p style="text-align:center; color:var(--taupe-dark); margin-top:30px; font-weight:bold;">Le chef élabore 10 nouvelles recettes ${recipeTypeLabel} avec des instructions de cuisson ultra-précises... Patientez 🍳</p>`;
+            container.innerHTML = `<p style="text-align:center; color:var(--taupe-dark); margin-top:30px; font-weight:bold;">Le chef élabore 10 nouvelles recettes ${recipeTypeLabel}... Patientez 🍳</p>`;
 
             const stockDescription = stock.map(s => `${s.qty} ${s.unit} de ${s.name}`).join(', ');
 
             const prompt = `Agis comme un grand chef cuisinier exigeant et passionné. Mon inventaire stock est : [ ${stockDescription} ]. 
             Le profil du foyer est : ${profile}. 
-            Interprète les ingrédients de manière globale (ex: "steak" = viande hachée ou bœuf à poêler ; "pâtes" = coquillettes, pennes ou spaghettis).
+            Interprète les ingrédients de manière globale (ex: "steak" = viande hachée ou bœuf ; "pâtes" = coquillettes ou pennes).
             Génère EXACTEMENT 10 recettes ${recipeTypeLabel} basées principalement sur mon stock (les seuls manques tolérés étant les basiques comme sel, poivre, eau, huile).
             
-            CONSIGNES DE QUALITÉ IMPÉRATIVES :
-            - Pas de recettes fades ou de descriptions simplistes (« faire cuire les pâtes » est INTERDIT).
-            - Détaille chaque étape avec une précision de chef : mentionne la température ou l'intensité du feu (ex: feu vif, feu doux, mijotage), la précision d'assaisonnement (quantité de sel, poivre, épices tolérées), les temps exacts, la coloration des viandes (saisir pour emprisonner les sucs), le repos de la viande, ou la cuisson al dente précise des pâtes.
+            CONSIGNES IMPÉRATIVES :
+            - Pas de recettes fades. Détaille chaque étape avec une précision de chef (intensité du feu, température, temps, coloration des viandes, repos, cuisson al dente).
             
-            Renvoie STRICTEMENT un objet JSON valide (sans texte introductif ni markdown superflu en dehors du bloc JSON) sous cette structure exacte :
+            Renvoie STRICTEMENT un objet JSON valide (sans aucun texte introductif ni markdown en dehors du bloc JSON) sous cette structure exacte :
             {
               "recipes": [
                 {
                   "name": "Nom de la recette",
                   "time": "25 min",
                   "ingredients": [{ "name": "Ingrédient", "qty": 100, "unit": "g" }],
-                  "steps": ["Étape 1 détaillée de chef avec feux/température/assaisonnement", "Étape 2 détaillée..."]
+                  "steps": ["Étape 1 détaillée", "Étape 2 détaillée"]
                 }
               ]
             }`;
@@ -435,6 +437,10 @@
                         temperature: 0.99
                     })
                 });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur réseau HTTP : ${response.status}`);
+                }
 
                 const data = await response.json();
                 let content = data.choices[0].message.content;
@@ -457,8 +463,8 @@
 
                 checkMissingIngredientsForShopping();
             } catch (error) {
-                console.error(error);
-                container.innerHTML = `<p style="text-align:center; color:#995555; margin-top:20px;">Erreur de génération. Vérifie ta connexion ou ta clé API.</p>`;
+                console.error("Erreur attrapée :", error);
+                container.innerHTML = `<p style="text-align:center; color:#995555; margin-top:20px;">Erreur de génération : ${error.message}. Vérifie la console (F12).</p>`;
             }
         }
 
@@ -467,6 +473,7 @@
             const container = document.getElementById(containerId);
             const recipesList = category === 'savory' ? savoryRecipes : sweetRecipes;
             
+            if(!container) return;
             container.innerHTML = '';
 
             recipesList.forEach((r, idx) => {
@@ -480,7 +487,7 @@
                         <div id="details-${category}-${idx}" class="recipe-details">
                             <h4>Ingrédients précis :</h4>
                             <ul>${ingredientsHtml}</ul>
-                            <h4 style="margin-top: 10px;">Préparation pas à pas (Cuisson & Secrets) :</h4>
+                            <h4 style="margin-top: 10px;">Préparation pas à pas :</h4>
                             <ol>${stepsHtml}</ol>
                             <button class="btn" style="margin-top: 15px; background-color: #6B8E23;" onclick="validateRecipe('${category}', ${idx})">C'est fait ! (Valider & Déduire du stock)</button>
                         </div>
@@ -491,11 +498,14 @@
 
         function toggleRecipeDetails(category, index) {
             const detailsEl = document.getElementById(`details-${category}-${index}`);
-            detailsEl.classList.toggle('open');
+            if(detailsEl) {
+                detailsEl.classList.toggle('open');
+            }
         }
 
         function validateRecipe(category, index) {
             const recipe = category === 'savory' ? savoryRecipes[index] : sweetRecipes[index];
+            if(!recipe) return;
             
             recipe.ingredients.forEach(ingNeeded => {
                 const stockItem = stock.find(s => s.name.toLowerCase() === ingNeeded.name.toLowerCase() && s.unit === ingNeeded.unit);
@@ -510,7 +520,6 @@
             switchTab('stock', document.querySelector('nav button:first-child'));
         }
 
-        // Regroupement automatique de la liste de courses
         function checkMissingIngredientsForShopping() {
             let missingMap = {};
             const allRecipes = [...savoryRecipes, ...sweetRecipes];
@@ -544,6 +553,7 @@
 
         function renderShoppingList() {
             const container = document.getElementById('shopping-list');
+            if(!container) return;
             container.innerHTML = '';
 
             if(shoppingListItems.length === 0) {
@@ -563,7 +573,10 @@
             });
         }
 
-        renderStock();
+        // Initialisation propre au chargement
+        window.onload = function() {
+            renderStock();
+        };
     </script>
 </body>
 </html>
