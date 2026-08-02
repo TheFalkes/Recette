@@ -175,14 +175,18 @@
         }
 
         .recipe-details {
-            display: none;
-            margin-top: 15px;
-            border-top: 1px dashed var(--taupe);
-            padding-top: 12px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            border-top: 0px dashed var(--taupe);
         }
 
         .recipe-details.open {
-            display: block;
+            max-height: 2000px;
+            margin-top: 15px;
+            border-top: 1px dashed var(--taupe);
+            padding-top: 12px;
+            transition: max-height 0.5s ease-in;
         }
 
         .recipe-details h4 {
@@ -359,12 +363,12 @@
             });
         }
 
-        // Génération de 10 salées et 10 sucrées via l'IA
+        // Génération optimisée et sécurisée pour extraire les 20 recettes de l'IA
         async function fetchRecipesFromAI() {
             const container = document.getElementById('recipes-container');
             container.innerHTML = `<p style="text-align:center; color:var(--taupe-dark); margin-top:30px; font-weight:bold;">Le chef prépare 10 recettes salées et 10 recettes sucrées sur-mesure... Patientez quelques secondes 🍳</p>`;
 
-            const profile = document.getElementById('profile-select',).value;
+            const profile = document.getElementById('profile-select').value;
             const stockDescription = stock.map(s => `${s.qty} ${s.unit} de ${s.name}`).join(', ');
 
             const prompt = `Agis comme un chef cuisinier expert et créatif. Mon inventaire stock est : [ ${stockDescription} ]. 
@@ -372,7 +376,7 @@
             Interprète les ingrédients de manière globale (ex: si j'ai "steak", considère de la viande hachée ou du bœuf ; si j'ai "pâtes", considère coquillettes, pennes ou autres).
             Génère EXACTEMENT 20 recettes réalisables principalement avec mon stock (les seuls manques tolérés étant les basiques comme sel, poivre, eau, huile).
             Sépare-les en deux listes distinctes : 10 recettes SALÉES et 10 recettes SUCRÉES.
-            Renvoie STRICTEMENT un objet JSON valide (sans aucun texte autour) sous cette structure exacte :
+            Renvoie STRICTEMENT un objet JSON valide (sans aucun texte introductif ni markdown superflu en dehors du bloc JSON) sous cette structure exacte :
             {
               "savory": [
                 {
@@ -409,7 +413,13 @@
                 const data = await response.json();
                 let content = data.choices[0].message.content;
                 
-                content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+                // Nettoyage ultra-robuste du format JSON
+                const firstBrace = content.indexOf('{');
+                const lastBrace = content.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                    content = content.substring(firstBrace, lastBrace + 1);
+                }
+
                 const parsed = JSON.parse(content);
 
                 savoryRecipes = parsed.savory || [];
@@ -480,12 +490,12 @@
             switchTab('stock', document.querySelector('nav button:first-child'));
         }
 
-        // Regroupement automatique de la liste de courses
+        // Regroupement intelligent et automatique de la liste de courses
         function checkMissingIngredientsForShopping() {
             let missingMap = {};
-            const allAllRecipes = [...savoryRecipes, ...sweetRecipes];
+            const allRecipes = [...savoryRecipes, ...sweetRecipes];
 
-            allAllRecipes.forEach(r => {
+            allRecipes.forEach(r => {
                 r.ingredients.forEach(ingNeeded => {
                     const stockItem = stock.find(s => s.name.toLowerCase() === ingNeeded.name.toLowerCase() && s.unit === ingNeeded.unit);
                     
