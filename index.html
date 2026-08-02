@@ -129,7 +129,7 @@
             background-color: var(--accent);
         }
 
-        /* Cartes */
+        /* Cartes Stock */
         .card {
             background-color: var(--card-bg);
             padding: 15px;
@@ -229,7 +229,7 @@
     <div class="main-container">
         <div id="tab-stock" class="tab-content active">
             <div style="background: var(--card-bg); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                <h3 style="margin-bottom: 10px;">Ajouter un ingrédient</h3>
+                <h3 style="margin-bottom: 10px;">Ajouter / Modifier un ingrédient</h3>
                 <input type="text" id="ing-name" placeholder="Nom (ex: Farine, Œufs...)">
                 <div class="row-inputs">
                     <input type="number" id="ing-qty" placeholder="Quantité" step="any">
@@ -242,10 +242,11 @@
                         <option value="sachet(s)">sachet(s)</option>
                     </select>
                 </div>
-                <button class="btn" onclick="addIngredient()">Ajouter au stock</button>
+                <button class="btn" onclick="saveIngredient()">Enregistrer dans le stock</button>
             </div>
 
             <h2>Mon Inventaire</h2>
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">Clique sur "Modifier" pour ajuster une quantité directement (ex: passer de 1kg à 500g).</p>
             <div id="stock-list" style="margin-top: 10px;"></div>
         </div>
 
@@ -259,16 +260,16 @@
                 </select>
             </div>
 
-            <button class="btn" onclick="fetchRecipesFromAI()" style="margin-bottom: 15px;">✨ Demander des idées de recettes à l'IA</button>
+            <button class="btn" onclick="fetchRecipesFromAI()" style="margin-bottom: 15px;">✨ Découvrir de nouvelles recettes variées</button>
 
             <div id="recipes-list">
-                <p style="text-align:center; color:#666; margin-top:20px;">Clique sur le bouton ci-dessus pour générer des recettes basées sur ton stock !</p>
+                <p style="text-align:center; color:#666; margin-top:20px;">Clique sur le bouton ci-dessus pour explorer des recettes inédites avec ton stock !</p>
             </div>
         </div>
 
         <div id="tab-shopping" class="tab-content">
-            <h2>🛒 Liste de courses automatique</h2>
-            <p style="margin-bottom: 15px; font-size: 0.9rem; color: #666;">Basée sur vos dernières recettes générées.</p>
+            <h2>🛒 Liste de courses regroupée</h2>
+            <p style="margin-bottom: 15px; font-size: 0.9rem; color: #666;">Regroupe automatiquement les ingrédients non disponibles ou manquants.</p>
             <div id="shopping-list">
                 <p style="text-align:center; color:#666; margin-top:20px;">Aucun achat manquant pour l'instant.</p>
             </div>
@@ -297,10 +298,8 @@
     </nav>
 
     <script>
-        // Ta clé API intégrée directement
         const apiKey = "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";
 
-        // Données initiales du stock
         let stock = [
             { name: "Farine", qty: 1000, unit: "g" },
             { name: "Œufs", qty: 6, unit: "unités" },
@@ -309,6 +308,7 @@
         ];
 
         let generatedRecipes = [];
+        let shoppingListItems = [];
         let activeRecipe = null;
         let currentStepIndex = 0;
 
@@ -321,15 +321,16 @@
                 document.getElementById('header-title').innerText = "📦 Mon Stock";
             } else if(tabName === 'recipes') {
                 document.getElementById('tab-recipes').classList.add('active');
-                document.getElementById('header-title').innerText = "🍳 Recettes Infinies (IA)";
+                document.getElementById('header-title').innerText = "🍳 Recettes Infinies & Variées";
             } else if(tabName === 'shopping') {
                 document.getElementById('tab-shopping').classList.add('active');
                 document.getElementById('header-title').innerText = "🛒 Liste de courses";
+                renderShoppingList();
             }
             btnElement.classList.add('active');
         }
 
-        function addIngredient() {
+        function saveIngredient() {
             const name = document.getElementById('ing-name').value.trim();
             const qty = parseFloat(document.getElementById('ing-qty').value);
             const unit = document.getElementById('ing-unit').value;
@@ -341,7 +342,7 @@
 
             const existing = stock.find(item => item.name.toLowerCase() === name.toLowerCase() && item.unit === unit);
             if(existing) {
-                existing.qty += qty;
+                existing.qty = qty; // Permet de modifier/écraser directement la quantité (ex: passer de 1kg à 500g)
             } else {
                 stock.push({ name, qty, unit });
             }
@@ -349,6 +350,14 @@
             document.getElementById('ing-name').value = '';
             document.getElementById('ing-qty').value = '';
             renderStock();
+        }
+
+        function editStockItem(index) {
+            const item = stock[index];
+            document.getElementById('ing-name').value = item.name;
+            document.getElementById('ing-qty').value = item.qty;
+            document.getElementById('ing-unit').value = item.unit;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function removeStockItem(index) {
@@ -366,28 +375,33 @@
                             <h3>${item.name}</h3>
                             <p>${item.qty} ${item.unit}</p>
                         </div>
-                        <button class="btn" style="width: auto; padding: 6px 10px; background: #995555;" onclick="removeStockItem(${index})">Supprimer</button>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn" style="width: auto; padding: 6px 10px; background: var(--taupe-dark);" onclick="editStockItem(${index})">Modifier</button>
+                            <button class="btn" style="width: auto; padding: 6px 10px; background: #995555;" onclick="removeStockItem(${index})">X</button>
+                        </div>
                     </div>
                 `;
             });
         }
 
-        // Appel à l'IA pour générer les recettes en fonction du stock
+        // Appel à l'IA avec exigence de diversité et faisabilité stricte
         async function fetchRecipesFromAI() {
             const container = document.getElementById('recipes-list');
-            container.innerHTML = `<p style="text-align:center; color:var(--taupe-dark); margin-top:20px; font-weight:bold;">Le chef virtuel cuisine tes idées... Patience 🍳</p>`;
+            container.innerHTML = `<p style="text-align:center; color:var(--taupe-dark); margin-top:20px; font-weight:bold;">Exploration de nouvelles idées de recettes variées... 🍳</p>`;
 
             const profile = document.getElementById('profile-select').value;
             const stockDescription = stock.map(s => `${s.qty} ${s.unit} de ${s.name}`).join(', ');
 
-            const prompt = `Agis comme un grand chef cuisinier. J'ai ces ingrédients dans mon stock : [ ${stockDescription} ]. 
+            const prompt = `Agis comme un chef cuisinier créatif. J'ai ces ingrédients dans mon stock : [ ${stockDescription} ]. 
             Le profil du foyer est : ${profile}. 
-            Invente 2 ou 3 recettes originales réalisables principalement avec ce stock. 
-            Réponds STRICTEMENT au format JSON valide sous cette structure exacte (sans texte autour, juste le tableau JSON) :
+            Génère 3 recettes complétement nouvelles, originales et VARIÉES (évite les basiques vus et revus comme de simples crêpes ou gâteaux au yaourt si d'autres combinaisons sont possibles).
+            Règles strictes : 
+            1. Tu dois proposer UNIQUEMENT des recettes faisables directement avec mon stock (seuls le sel, le poivre, l'eau ou l'huile de cuisson peuvent manquer). 
+            2. Renvoie STRICTEMENT un tableau JSON valide (sans aucun texte autour) respectant cette structure exacte :
             [
               {
-                "name": "Nom de la recette",
-                "time": "20 min",
+                "name": "Nom original de la recette",
+                "time": "25 min",
                 "ingredients": [
                   { "name": "Nom ingrédient", "qty": 200, "unit": "g" }
                 ],
@@ -399,7 +413,6 @@
             ]`;
 
             try {
-                // Requête vers l'API d'IA compatible (Groq ou autre endpoint configuré avec la clé)
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                     method: "POST",
                     headers: {
@@ -409,21 +422,21 @@
                     body: JSON.stringify({
                         model: "llama-3.3-70b-versatile",
                         messages: [{ role: "user", content: prompt }],
-                        temperature: 0.7
+                        temperature: 0.9 // Température élevée pour forcer la diversité et la nouveauté
                     })
                 });
 
                 const data = await response.json();
                 let content = data.choices[0].message.content;
                 
-                // Nettoyage du texte pour s'assurer d'extraire le JSON proprement
                 content = content.replace(/```json/g, "").replace(/```/g, "").trim();
                 generatedRecipes = JSON.parse(content);
 
                 renderRecipes();
+                checkMissingIngredientsForShopping();
             } catch (error) {
                 console.error(error);
-                container.innerHTML = `<p style="text-align:center; color:#995555; margin-top:20px;">Erreur lors de la génération des recettes. Vérifie ta connexion ou réessaie.</p>`;
+                container.innerHTML = `<p style="text-align:center; color:#995555; margin-top:20px;">Erreur lors de la génération. Vérifie ta connexion ou réessaie.</p>`;
             }
         }
 
@@ -432,7 +445,7 @@
             container.innerHTML = '';
 
             if(generatedRecipes.length === 0) {
-                container.innerHTML = `<p style="text-align:center; color:#666; margin-top:20px;">Aucune recette générée pour l'instant.</p>`;
+                container.innerHTML = `<p style="text-align:center; color:#666; margin-top:20px;">Aucune recette générée.</p>`;
                 return;
             }
 
@@ -441,12 +454,65 @@
 
                 container.innerHTML += `
                     <div class="recipe-card">
-                        <span class="badge">✨ Idée sur-mesure</span>
+                        <span class="badge">✨ 100% Réalisable</span>
                         <h3>${r.name} (${r.time})</h3>
                         <ul style="margin: 10px 0 15px 20px; font-size: 0.9rem;">
                             ${ingredientsHtml}
                         </ul>
                         <button class="btn" onclick="startCooking(${index})">Cuisiner cette recette</button>
+                    </div>
+                `;
+            });
+        }
+
+        // Regroupement automatique et intelligent de la liste de courses
+        function checkMissingIngredientsForShopping() {
+            shoppingListItems = [];
+            let missingMap = {};
+
+            generatedRecipes.forEach(r => {
+                r.ingredients.forEach(ingNeeded => {
+                    const stockItem = stock.find(s => s.name.toLowerCase() === ingNeeded.name.toLowerCase() && s.unit === ingNeeded.unit);
+                    
+                    let qtyNeeded = ingNeeded.qty;
+                    let qtyInStock = stockItem ? stockItem.qty : 0;
+
+                    if(qtyInStock < qtyNeeded) {
+                        let missingQty = qtyNeeded - qtyInStock;
+                        let key = `${ingNeeded.name.toLowerCase()}_${ingNeeded.unit}`;
+
+                        if(missingMap[key]) {
+                            missingMap[key].qty += missingQty; // Regroupe si l'ingrédient manque déjà
+                        } else {
+                            missingMap[key] = {
+                                name: ingNeeded.name,
+                                qty: missingQty,
+                                unit: ingNeeded.unit
+                            };
+                        }
+                    }
+                });
+            });
+
+            shoppingListItems = Object.values(missingMap);
+        }
+
+        function renderShoppingList() {
+            const container = document.getElementById('shopping-list');
+            container.innerHTML = '';
+
+            if(shoppingListItems.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#666; margin-top:20px;">Aucun achat manquant pour l'instant.</p>`;
+                return;
+            }
+
+            shoppingListItems.forEach(item => {
+                container.innerHTML += `
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>${item.name}</h3>
+                            <p>Manque total : <b>${item.qty} ${item.unit}</b></p>
+                        </div>
                     </div>
                 `;
             });
@@ -481,10 +547,9 @@
                 currentStepIndex++;
                 showStep();
             } else {
-                // FIN DE LA RECETTE -> DÉDUCTION AUTOMATIQUE DES STOCKS
                 applyRecipeStockDeduction();
                 closeCookingMode();
-                alert("Recette validée ! Les ingrédients ont été automatiquement retirés de votre stock.");
+                alert("Recette validée ! Les ingrédients ont été automatiquement déduits de votre stock.");
                 renderStock();
             }
         }
@@ -501,7 +566,6 @@
             activeRecipe = null;
         }
 
-        // Déduction automatique du stock lors de "C'est fait !"
         function applyRecipeStockDeduction() {
             activeRecipe.ingredients.forEach(ingNeeded => {
                 const stockItem = stock.find(s => s.name.toLowerCase() === ingNeeded.name.toLowerCase() && s.unit === ingNeeded.unit);
@@ -512,7 +576,6 @@
             });
         }
 
-        // Initialisation affichage stock
         renderStock();
     </script>
 </body>
