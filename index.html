@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mon App Recettes & Stock</title>
+    <title>Mon App Recettes & Stock IA</title>
     <style>
         :root {
             --bg-color: #F5F2EB;
@@ -152,13 +152,12 @@
             color: #666;
         }
 
-        /* Modal / Formulaire d'ajout rapide */
         .row-inputs {
             display: flex;
             gap: 10px;
         }
 
-        /* Section Recettes & Mode Cuisine */
+        /* Section Recettes */
         .recipe-card {
             background-color: var(--card-bg);
             border-radius: 10px;
@@ -174,9 +173,9 @@
             font-size: 0.8rem;
             font-weight: bold;
             margin-bottom: 8px;
+            background-color: #D4EDDA;
+            color: #155724;
         }
-        .badge.ok { background-color: #D4EDDA; color: #155724; }
-        .badge.ko { background-color: #F8D7DA; color: #721C24; }
 
         /* Mode Pas à Pas plein écran */
         #cooking-mode {
@@ -219,16 +218,6 @@
             display: flex;
             gap: 10px;
         }
-
-        .timer-btn {
-            background-color: #D8CEBC;
-            border: 1px solid var(--taupe);
-            padding: 8px 12px;
-            border-radius: 6px;
-            margin-top: 15px;
-            cursor: pointer;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
@@ -257,33 +246,32 @@
             </div>
 
             <h2>Mon Inventaire</h2>
-            <div id="stock-list" style="margin-top: 10px;">
-                </div>
+            <div id="stock-list" style="margin-top: 10px;"></div>
         </div>
 
         <div id="tab-recipes" class="tab-content">
             <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
                 <label style="font-weight: bold;">Profil :</label>
-                <select id="profile-select" style="margin-bottom: 0;" onchange="renderRecipes()">
+                <select id="profile-select" style="margin-bottom: 0;">
                     <option value="solo">Seul (1 pers)</option>
                     <option value="couple">Couple (2 pers)</option>
-                    <option value="family" selected>Famille (2 adultes + 1 enfant)</option>
+                    <option value="famille" selected>Famille (2 adultes + 1 enfant de 4 ans)</option>
                 </select>
             </div>
 
-            <div style="margin-bottom: 15px;">
-                <button class="btn" id="filter-btn" onclick="toggleVideFrigo()" style="background-color: var(--taupe);">Filtre Mode Vide-Frigo : TOUT</button>
-            </div>
+            <button class="btn" onclick="fetchRecipesFromAI()" style="margin-bottom: 15px;">✨ Demander des idées de recettes à l'IA</button>
 
             <div id="recipes-list">
-                </div>
+                <p style="text-align:center; color:#666; margin-top:20px;">Clique sur le bouton ci-dessus pour générer des recettes basées sur ton stock !</p>
+            </div>
         </div>
 
         <div id="tab-shopping" class="tab-content">
             <h2>🛒 Liste de courses automatique</h2>
-            <p style="margin-bottom: 15px; font-size: 0.9rem; color: #666;">Générée selon les manques pour vos recettes.</p>
+            <p style="margin-bottom: 15px; font-size: 0.9rem; color: #666;">Basée sur vos dernières recettes générées.</p>
             <div id="shopping-list">
-                </div>
+                <p style="text-align:center; color:#666; margin-top:20px;">Aucun achat manquant pour l'instant.</p>
+            </div>
         </div>
     </div>
 
@@ -295,7 +283,6 @@
         <div class="cooking-body">
             <span id="step-counter" style="font-weight: bold; color: var(--taupe); margin-bottom: 10px;">Étape 1 sur 3</span>
             <h2 id="step-text">Texte de l'étape...</h2>
-            <div id="step-timer-container"></div>
         </div>
         <div class="cooking-footer">
             <button class="btn" onclick="prevStep()">Précédent</button>
@@ -304,19 +291,16 @@
     </div>
 
     <nav>
-        <button class="active" onclick="switchTab('stock', this)">
-            📦 Stock
-        </button>
-        <button onclick="switchTab('recipes', this)">
-            🍳 Recettes
-        </button>
-        <button onclick="switchTab('shopping', this)">
-            🛒 Courses
-        </button>
+        <button class="active" onclick="switchTab('stock', this)">📦 Stock</button>
+        <button onclick="switchTab('recipes', this)">🍳 Recettes</button>
+        <button onclick="switchTab('shopping', this)">🛒 Courses</button>
     </nav>
 
     <script>
-        // Données initiales stock & recettes de test
+        // Ta clé API intégrée directement
+        const apiKey = "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";
+
+        // Données initiales du stock
         let stock = [
             { name: "Farine", qty: 1000, unit: "g" },
             { name: "Œufs", qty: 6, unit: "unités" },
@@ -324,47 +308,10 @@
             { name: "Sucre", qty: 500, unit: "g" }
         ];
 
-        const recipes = [
-            {
-                id: 1,
-                name: "Crêpes familiales",
-                time: "15 min",
-                ingredients: [
-                    { name: "Farine", baseQty: 300, unit: "g" },
-                    { name: "Œufs", baseQty: 4, unit: "unités" },
-                    { name: "Lait", baseQty: 0.5, unit: "L" },
-                    { name: "Sucre", baseQty: 50, unit: "g" }
-                ],
-                steps: [
-                    "Mettre la farine dans un grand saladier et former un puits.",
-                    "Ajouter les œufs et mélanger doucement.",
-                    "Incorporer le lait progressivement en remuant pour éviter les grumeaux (Laisser reposer 10 min).",
-                    "Cuire dans une poêle chaude bien huilée."
-                ]
-            },
-            {
-                id: 2,
-                name: "Gâteau au Yaourt simple",
-                time: "30 min",
-                ingredients: [
-                    { name: "Farine", baseQty: 400, unit: "g" },
-                    { name: "Sucre", baseQty: 200, unit: "g" },
-                    { name: "Œufs", baseQty: 3, unit: "unités" }
-                ],
-                steps: [
-                    "Préchauffer le four à 180°C.",
-                    "Mélanger tous les ingrédients dans un plat.",
-                    "Enfourner pour 30 min."
-                ]
-            }
-        ];
-
-        let currentFilterVideFrigo = false;
+        let generatedRecipes = [];
         let activeRecipe = null;
         let currentStepIndex = 0;
-        let currentMultiplier = 1;
 
-        // Navigation entre onglets
         function switchTab(tabName, btnElement) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
@@ -374,17 +321,14 @@
                 document.getElementById('header-title').innerText = "📦 Mon Stock";
             } else if(tabName === 'recipes') {
                 document.getElementById('tab-recipes').classList.add('active');
-                document.getElementById('header-title').innerText = "🍳 Recettes disponibles";
-                renderRecipes();
+                document.getElementById('header-title').innerText = "🍳 Recettes Infinies (IA)";
             } else if(tabName === 'shopping') {
                 document.getElementById('tab-shopping').classList.add('active');
                 document.getElementById('header-title').innerText = "🛒 Liste de courses";
-                renderShoppingList();
             }
             btnElement.classList.add('active');
         }
 
-        // Gestion du stock
         function addIngredient() {
             const name = document.getElementById('ing-name').value.trim();
             const qty = parseFloat(document.getElementById('ing-qty').value);
@@ -428,95 +372,89 @@
             });
         }
 
-        // Calcul multi-profil (Famille = 2 adultes + 1 enfant = environ 2.5 parts ou 0.7 par personne)
-        function getMultiplier() {
-            const val = document.getElementById('profile-select').value;
-            if(val === 'solo') return 0.7;
-            if(val === 'couple') return 1.4;
-            if(val === 'family') return 2.2; // 2 adultes + 1 enfant de 4 ans
-            return 1;
-        }
+        // Appel à l'IA pour générer les recettes en fonction du stock
+        async function fetchRecipesFromAI() {
+            const container = document.getElementById('recipes-list');
+            container.innerHTML = `<p style="text-align:center; color:var(--taupe-dark); margin-top:20px; font-weight:bold;">Le chef virtuel cuisine tes idées... Patience 🍳</p>`;
 
-        function toggleVideFrigo() {
-            currentFilterVideFrigo = !currentFilterVideFrigo;
-            const btn = document.getElementById('filter-btn');
-            if(currentFilterVideFrigo) {
-                btn.innerText = "Filtre Mode Vide-Frigo : ACTIF (100%)";
-                btn.style.backgroundColor = "#8C7C6E";
-            } else {
-                btn.innerText = "Filtre Mode Vide-Frigo : TOUT";
-                btn.style.backgroundColor = "var(--taupe)";
+            const profile = document.getElementById('profile-select').value;
+            const stockDescription = stock.map(s => `${s.qty} ${s.unit} de ${s.name}`).join(', ');
+
+            const prompt = `Agis comme un grand chef cuisinier. J'ai ces ingrédients dans mon stock : [ ${stockDescription} ]. 
+            Le profil du foyer est : ${profile}. 
+            Invente 2 ou 3 recettes originales réalisables principalement avec ce stock. 
+            Réponds STRICTEMENT au format JSON valide sous cette structure exacte (sans texte autour, juste le tableau JSON) :
+            [
+              {
+                "name": "Nom de la recette",
+                "time": "20 min",
+                "ingredients": [
+                  { "name": "Nom ingrédient", "qty": 200, "unit": "g" }
+                ],
+                "steps": [
+                  "Étape 1...",
+                  "Étape 2..."
+                ]
+              }
+            ]`;
+
+            try {
+                // Requête vers l'API d'IA compatible (Groq ou autre endpoint configuré avec la clé)
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [{ role: "user", content: prompt }],
+                        temperature: 0.7
+                    })
+                });
+
+                const data = await response.json();
+                let content = data.choices[0].message.content;
+                
+                // Nettoyage du texte pour s'assurer d'extraire le JSON proprement
+                content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+                generatedRecipes = JSON.parse(content);
+
+                renderRecipes();
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = `<p style="text-align:center; color:#995555; margin-top:20px;">Erreur lors de la génération des recettes. Vérifie ta connexion ou réessaie.</p>`;
             }
-            renderRecipes();
-        }
-
-        // Vérification des stocks pour une recette
-        function checkRecipeFeasibility(recipe, mult) {
-            let missingCount = 0;
-            let totalIngredients = recipe.ingredients.length;
-
-            recipe.ingredients.forEach(ing => {
-                const required = ing.baseQty * mult;
-                const stockItem = stock.find(s => s.name.toLowerCase() === ing.name.toLowerCase());
-                if(!stockItem || stockItem.qty < required) {
-                    missingCount++;
-                }
-            });
-
-            let percentage = Math.round(((totalIngredients - missingCount) / totalIngredients) * 100);
-            return percentage;
         }
 
         function renderRecipes() {
             const container = document.getElementById('recipes-list');
             container.innerHTML = '';
-            currentMultiplier = getMultiplier();
 
-            let displayRecipes = [...recipes];
-            
-            // Calculer les pourcentages pour chaque recette
-            displayRecipes.forEach(r => {
-                r.feasibility = checkRecipeFeasibility(r, currentMultiplier);
-            });
-
-            // Tri par faisabilité descendante
-            displayRecipes.sort((a, b) => b.feasibility - a.feasibility);
-
-            if(currentFilterVideFrigo) {
-                displayRecipes = displayRecipes.filter(r => r.feasibility === 100);
-            }
-
-            if(displayRecipes.length === 0) {
-                container.innerHTML = `<p style="text-align:center; color:#666; margin-top:20px;">Aucune recette ne correspond à ce filtre avec votre stock actuel.</p>`;
+            if(generatedRecipes.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#666; margin-top:20px;">Aucune recette générée pour l'instant.</p>`;
                 return;
             }
 
-            displayRecipes.forEach(r => {
-                let badgeClass = r.feasibility === 100 ? 'ok' : 'ko';
-                let badgeText = r.feasibility === 100 ? '✨ Faisable à 100% (Vide-frigo)' : `Faisable à ${r.feasibility}%`;
-
-                let ingredientsHtml = r.ingredients.map(ing => {
-                    let needed = (ing.baseQty * currentMultiplier).toFixed(1);
-                    return `<li>${ing.name}: <b>${needed} ${ing.unit}</b></li>`;
-                }).join('');
+            generatedRecipes.forEach((r, index) => {
+                let ingredientsHtml = r.ingredients.map(ing => `<li>${ing.name}: <b>${ing.qty} ${ing.unit}</b></li>`).join('');
 
                 container.innerHTML += `
                     <div class="recipe-card">
-                        <span class="badge ${badgeClass}">${badgeText}</span>
+                        <span class="badge">✨ Idée sur-mesure</span>
                         <h3>${r.name} (${r.time})</h3>
                         <ul style="margin: 10px 0 15px 20px; font-size: 0.9rem;">
                             ${ingredientsHtml}
                         </ul>
-                        <button class="btn" onclick="startCooking(${r.id})">Cuisiner cette recette</button>
+                        <button class="btn" onclick="startCooking(${index})">Cuisiner cette recette</button>
                     </div>
                 `;
             });
         }
 
         // Mode Pas à Pas (Plein écran)
-        function startCooking(id) {
-            activeRecipe = recipes.find(r => r.id === id);
-            current2MultiplierVal = getMultiplier();
+        function startCooking(index) {
+            activeRecipe = generatedRecipes[index];
             currentStepIndex = 0;
             document.getElementById('cooking-recipe-title').innerText = activeRecipe.name;
             document.getElementById('cooking-mode').style.display = 'flex';
@@ -544,7 +482,7 @@
                 showStep();
             } else {
                 // FIN DE LA RECETTE -> DÉDUCTION AUTOMATIQUE DES STOCKS
-                applyRecipeStockDedecution();
+                applyRecipeStockDeduction();
                 closeCookingMode();
                 alert("Recette validée ! Les ingrédients ont été automatiquement retirés de votre stock.");
                 renderStock();
@@ -564,56 +502,17 @@
         }
 
         // Déduction automatique du stock lors de "C'est fait !"
-        function applyRecipeStockDedecution() {
-            const mult = getMultiplier();
+        function applyRecipeStockDeduction() {
             activeRecipe.ingredients.forEach(ingNeeded => {
-                const totalNeeded = ingNeeded.baseQty * mult;
                 const stockItem = stock.find(s => s.name.toLowerCase() === ingNeeded.name.toLowerCase() && s.unit === ingNeeded.unit);
                 if(stockItem) {
-                    stockItem.qty -= totalNeeded;
+                    stockItem.qty -= ingNeeded.qty;
                     if(stockItem.qty < 0) stockItem.qty = 0;
                 }
             });
         }
 
-        // Génération de la liste de courses basée sur les manques de la première recette ou globale
-        function renderShoppingList() {
-            const container = document.getElementById('shopping-list');
-            container.innerHTML = '';
-            
-            let missingItems = [];
-            const mult = getMultiplier();
-
-            recipes.forEach(r => {
-                r.ingredients.forEach(ing => {
-                    const required = ing.baseQty * mult;
-                    const stockItem = stock.find(s => s.name.toLowerCase() === ing.name.toLowerCase());
-                    const currentQty = stockItem ? stockItem.qty : 0;
-                    if(currentQty < required) {
-                        let diff = required - currentQty;
-                        missingItems.push({ name: ing.name, qty: diff.toFixed(1), unit: ing.unit });
-                    }
-                });
-            });
-
-            if(missingItems.length === 0) {
-                container.innerHTML = `<p style="color:#666;">Rien à acheter, votre stock couvre vos envies !</p>`;
-                return;
-            }
-
-            missingItems.forEach(item => {
-                container.innerHTML += `
-                    <div class="card">
-                        <div class="card-info">
-                            <h3>${item.name}</h3>
-                            <p>Manquant estimé : ${item.qty} ${item.unit}</p>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        // Initialisation de l'affichage du stock au chargement
+        // Initialisation affichage stock
         renderStock();
     </script>
 </body>
